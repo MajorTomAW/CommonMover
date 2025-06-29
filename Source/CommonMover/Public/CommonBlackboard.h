@@ -6,4 +6,5 @@
 namespace CommonBlackboard
 {
 	const FName LastFallTime = TEXT("LastFallTime");
+	const FName LastJumpTime = TEXT("LastJumpTime");
 }

@@ -67,7 +67,7 @@ void UCommonGroundModeBase::ApplyMovement(FMoverTickEndData& OutputState)
 
 			// Did we fail to step up?
 			bool bSlidAlongWall = false;
-			if (!bSteppedUp) //@TODO: Originally this was without the negation operator
+			if (bSteppedUp)
 			{
 				// Attempt to slide along an unclimbable obstacle
 				bSlidAlongWall = ApplySlideAlongWall(WalkData);
@@ -146,10 +146,10 @@ void UCommonGroundModeBase::ValidateFloor()
 bool UCommonGroundModeBase::ApplyDynamicFloorMovement(FMoverTickEndData& OutputState, FMovementRecord& MoveRecord)
 {
 	// If we're on a dynamic movement base, attempt to move along with whatever motion is has performed since we last ticked
-	//if (OldRelativeBase.UsesSameBase(StartingSyncState->GetMovementBase(), StartingSyncState->GetMovementBaseBoneName()))
-	//{
-	//	return UBasedMovementUtils::TryMoveToStayWithBase(UpdatedComponent, UpdatedPrimitive, OldRelativeBase, MoveRecord, false);
-	//}
+	/*if (OldRelativeBase.UsesSameBase(StartingSyncState->GetMovementBase(), StartingSyncState->GetMovementBaseBoneName()))
+	{
+		return UBasedMovementUtils::TryMoveToStayWithBase(UpdatedComponent, UpdatedPrimitive, OldRelativeBase, MoveRecord, false);
+	}*/
 
 	return false;
 }
