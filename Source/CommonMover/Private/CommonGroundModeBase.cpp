@@ -17,11 +17,19 @@ UCommonGroundModeBase::UCommonGroundModeBase(const FObjectInitializer& ObjectIni
 
 void UCommonGroundModeBase::ApplyMovement(FMoverTickEndData& OutputState)
 {
+	// Get the settings
+	const UCommonLegacyMovementSettings* CommonLegacySettings =
+		MutableMoverComponent->FindSharedSettings<UCommonLegacyMovementSettings>();
+	checkf(CommonLegacySettings, TEXT("I don't want to hardcode the CommonLegacySettings into this MovementMode, you need to add the movement settings manually or override which settings to use."));
+
 	// Ensure we have cached floor information before moving
-	ValidateFloor();
+	ValidateFloor(CommonLegacySettings->FloorSweepDistance, CommonLegacySettings->MaxWalkSlopeCosine);
 
 	// Initialize the move data
 	FCommonMoveData WalkData;
+	const FVector UpDirection = MutableMoverComponent->GetUpDirection();
+
+	bool bDidAttemptMovement = false;
 
 	// Initialize the move record
 	WalkData.MoveRecord.SetDeltaSeconds(DeltaTime);
@@ -32,7 +40,7 @@ void UCommonGroundModeBase::ApplyMovement(FMoverTickEndData& OutputState)
 	// After handling the dynamic base, check for disabled movement
 	if (MutableMoverComponent->IsMovementDisabled())
 	{
-		CaptureFinalState(CurrentFloor, WalkData.MoveRecord);
+		CaptureFinalState(CurrentFloor, bDidAttemptMovement, WalkData.MoveRecord);
 		return;
 	}
 
@@ -43,12 +51,23 @@ void UCommonGroundModeBase::ApplyMovement(FMoverTickEndData& OutputState)
 	WalkData.OriginalMoveDelta = ProposedMove->LinearVelocity * DeltaTime;
 	WalkData.CurrentMoveDelta = WalkData.OriginalMoveDelta;
 
+	const FRotator StartingOrient = StartingSyncState->GetOrientation_WorldSpace();
+	FRotator TargetOrient = StartingOrient;
+	WalkData.TargetOrientQuat = TargetOrient.Quaternion();
+	if (CommonLegacySettings->bShouldRemainVertical)
+	{
+		WalkData.TargetOrientQuat = FRotationMatrix::MakeFromZX(UpDirection, WalkData.TargetOrientQuat.GetForwardVector()).ToQuat();
+	}
+
 	// Floor check result passed to step-up suboperations, so we can use their final floor results if they did a test
 	FOptionalFloorCheckResult StepUpFloorResult;
 
 	// Are we moving or re-orienting?
 	if (!WalkData.CurrentMoveDelta.IsNearlyZero() ||bIsOrientationChanging)
 	{
+		// We are about to move !
+		bDidAttemptMovement = true;
+
 		// Apply the first move.
 		// This will catch any potential collisions or initial penetration
 		bool bMovedFreely = ApplyFirstMove(WalkData);
@@ -60,17 +79,17 @@ void UCommonGroundModeBase::ApplyMovement(FMoverTickEndData& OutputState)
 		if (!bDepenetration)
 		{
 			// If no depenetration was done, we can check for a ramp
-			bool bMovedUpRamp = ApplyRampMove(WalkData);
+			bool bMovedUpRamp = ApplyRampMove(WalkData, CommonLegacySettings->MaxWalkSlopeCosine);
 
 			// Attempt to move up any climbable obstacles
-			bool bSteppedUp = ApplyStepUpMove(WalkData, StepUpFloorResult);
+			bool bSteppedUp = ApplyStepUpMove(WalkData, StepUpFloorResult, CommonLegacySettings->MaxWalkSlopeCosine, CommonLegacySettings->MaxStepHeight, CommonLegacySettings->FloorSweepDistance);
 
 			// Did we fail to step up?
 			bool bSlidAlongWall = false;
 			if (bSteppedUp)
 			{
 				// Attempt to slide along an unclimbable obstacle
-				bSlidAlongWall = ApplySlideAlongWall(WalkData);
+				bSlidAlongWall = ApplySlideAlongWall(WalkData, CommonLegacySettings->MaxWalkSlopeCosine, CommonLegacySettings->MaxStepHeight);
 			}
 
 			// Search for the floor we've ended up on
@@ -82,7 +101,7 @@ void UCommonGroundModeBase::ApplyMovement(FMoverTickEndData& OutputState)
 				CurrentFloor);
 
 			// Adjust vertically so we remain in contact with the floor
-			bool bAdjustedToFloor = ApplyFloorHeightAdjustment(WalkData);
+			bool bAdjustedToFloor = ApplyFloorHeightAdjustment(WalkData, CommonLegacySettings->MaxWalkSlopeCosine);
 
 			// Check if we're falling
 			if (HandleFalling(OutputState, WalkData.MoveRecord, CurrentFloor.HitResult, DeltaMs * WalkData.PercentTimeAppliedSoFar))
@@ -118,10 +137,10 @@ void UCommonGroundModeBase::ApplyMovement(FMoverTickEndData& OutputState)
 	}
 
 	// Capture the final movement state
-	CaptureFinalState(CurrentFloor, WalkData.MoveRecord);
+	CaptureFinalState(CurrentFloor, bDidAttemptMovement, WalkData.MoveRecord);
 }
 
-void UCommonGroundModeBase::ValidateFloor()
+void UCommonGroundModeBase::ValidateFloor(float FloorSweepDistance, float MaxWalkableSlopeCosine)
 {
 	// Check if we have cached floor data
 	if (!SimBlackboard->TryGet(CommonBlackboard::LastFloorResult, CurrentFloor))
@@ -129,8 +148,8 @@ void UCommonGroundModeBase::ValidateFloor()
 		// Search for the floor data again
 		UFloorQueryUtils::FindFloor(
 			MovingComponentSet,
-			CommonLegacySettings->FloorSweepDistance,
-			CommonLegacySettings->MaxWalkSlopeCosine,
+			FloorSweepDistance,
+			MaxWalkableSlopeCosine,
 			MovingComponentSet.UpdatedPrimitive->GetComponentLocation(),
 			CurrentFloor);
 	}
@@ -145,7 +164,7 @@ void UCommonGroundModeBase::ValidateFloor()
 
 bool UCommonGroundModeBase::ApplyDynamicFloorMovement(FMoverTickEndData& OutputState, FMovementRecord& MoveRecord)
 {
-	// If we're on a dynamic movement base, attempt to move along with whatever motion is has performed since we last ticked
+	// If we're on a dynamic movement base, attempt to move along with whatever motion has performed since we last ticked
 	/*if (OldRelativeBase.UsesSameBase(StartingSyncState->GetMovementBase(), StartingSyncState->GetMovementBaseBoneName()))
 	{
 		return UBasedMovementUtils::TryMoveToStayWithBase(UpdatedComponent, UpdatedPrimitive, OldRelativeBase, MoveRecord, false);
@@ -172,7 +191,7 @@ bool UCommonGroundModeBase::ApplyFirstMove(FCommonMoveData& WalkData)
 #if ENABLE_VISUAL_LOG
 	//@TODO: VLOG
 #endif
-	
+
 	return bMoved;
 }
 
@@ -189,7 +208,9 @@ bool UCommonGroundModeBase::ApplyDepenetrationOnFirstMove(FCommonMoveData& WalkD
 	return false;
 }
 
-bool UCommonGroundModeBase::ApplyRampMove(FCommonMoveData& WalkData)
+bool UCommonGroundModeBase::ApplyRampMove(
+	FCommonMoveData& WalkData,
+	float MaxWalkableSlopeCosine)
 {
 	// Have we hit something that we suspect is a ramp?
 	if (WalkData.MoveHitResult.IsValidBlockingHit())
@@ -197,7 +218,7 @@ bool UCommonGroundModeBase::ApplyRampMove(FCommonMoveData& WalkData)
 		// Check if the hit normal is a ramp
 		if ( (WalkData.MoveHitResult.Time > 0.0f)
 			&& (WalkData.MoveHitResult.Normal.Z > UE_KINDA_SMALL_NUMBER)
-			&& (UFloorQueryUtils::IsHitSurfaceWalkable(WalkData.MoveHitResult, FVector::UpVector, CommonLegacySettings->MaxWalkSlopeCosine)))
+			&& (UFloorQueryUtils::IsHitSurfaceWalkable(WalkData.MoveHitResult, FVector::UpVector, MaxWalkableSlopeCosine)))
 		{
 			// Compute the deflected move onto the ramp and update the move delta
 			// We apply only the time remaining. (1-time applied)
@@ -205,7 +226,7 @@ bool UCommonGroundModeBase::ApplyRampMove(FCommonMoveData& WalkData)
 				WalkData.CurrentMoveDelta * (1.0f - WalkData.PercentTimeAppliedSoFar),
 				FVector::UpVector,
 				WalkData.MoveHitResult,
-				CommonLegacySettings->MaxWalkSlopeCosine,
+				MaxWalkableSlopeCosine,
 				CurrentFloor.bLineTrace);
 
 			// Move again onto the ramp
@@ -233,7 +254,12 @@ bool UCommonGroundModeBase::ApplyRampMove(FCommonMoveData& WalkData)
 	return false;
 }
 
-bool UCommonGroundModeBase::ApplyStepUpMove(FCommonMoveData& WalkData, FOptionalFloorCheckResult& StepUpFloorResult)
+bool UCommonGroundModeBase::ApplyStepUpMove(
+	FCommonMoveData& WalkData,
+	FOptionalFloorCheckResult& StepUpFloorResult,
+	float MaxWalkableSlopeCosine,
+	float MaxStepHeight,
+	float FloorSweepDistance)
 {
 	// Are we hitting something?
 	if (WalkData.MoveHitResult.IsValidBlockingHit())
@@ -245,10 +271,23 @@ bool UCommonGroundModeBase::ApplyStepUpMove(FCommonMoveData& WalkData, FOptional
 			const FVector PreStepUpLocation = MovingComponentSet.UpdatedComponent->GetComponentLocation();
 			const FVector DownwardDir = -MutableMoverComponent->GetUpDirection();
 
-			if (!UGroundMovementUtils::TryMoveToStepUp(MovingComponentSet, DownwardDir, CommonLegacySettings->MaxStepHeight, CommonLegacySettings->MaxWalkSlopeCosine, CommonLegacySettings->FloorSweepDistance, WalkData.OriginalMoveDelta * (1.f - WalkData.PercentTimeAppliedSoFar), WalkData.MoveHitResult, CurrentFloor, false, &StepUpFloorResult, WalkData.MoveRecord))
+			if (!UGroundMovementUtils::TryMoveToStepUp(
+				MovingComponentSet,
+				DownwardDir,
+				MaxStepHeight,
+				MaxWalkableSlopeCosine,
+				FloorSweepDistance,
+				WalkData.OriginalMoveDelta * (1.f - WalkData.PercentTimeAppliedSoFar),
+				WalkData.MoveHitResult,
+				CurrentFloor,
+				false,
+				&StepUpFloorResult,
+				WalkData.MoveRecord))
 			{
 				// Update the time percentage
-				// WalkData.PercentTimeAppliedSoFar = UpdateTimePercentAppliedSoFar(WalkData.PercentTimeAppliedSoFar, WalkData.MoveHitResult.Time);
+				//FMoverOnImpactParams ImpactParams(DefaultModeNames::Walking, WalkData.MoveHitResult, WalkData.OriginalMoveDelta);
+				//MovingComponentSet.MoverComponent->HandleImpact(ImpactParams);
+				//WalkData.PercentTimeAppliedSoFar = UpdateTimePercentAppliedSoFar(WalkData.PercentTimeAppliedSoFar, WalkData.MoveHitResult.Time);
 
 #if ENABLE_VISUAL_LOG
 				//@TODO: VLOG
@@ -268,7 +307,10 @@ bool UCommonGroundModeBase::ApplyStepUpMove(FCommonMoveData& WalkData, FOptional
 	return false;
 }
 
-bool UCommonGroundModeBase::ApplySlideAlongWall(FCommonMoveData& WalkData)
+bool UCommonGroundModeBase::ApplySlideAlongWall(
+	FCommonMoveData& WalkData,
+	float MaxWalkableSlopeCosine,
+	float MaxStepHeight)
 {
 	// Are we hitting something?
 	if (WalkData.MoveHitResult.IsValidBlockingHit())
@@ -289,8 +331,8 @@ bool UCommonGroundModeBase::ApplySlideAlongWall(FCommonMoveData& WalkData)
 			WalkData.MoveHitResult,
 			true,
 			WalkData.MoveRecord,
-			CommonLegacySettings->MaxWalkSlopeCosine,
-			CommonLegacySettings->MaxStepHeight);
+			MaxWalkableSlopeCosine,
+			MaxStepHeight);
 
 		// Update the time percentage
 		WalkData.PercentTimeAppliedSoFar = UpdateTimePercentAppliedSoFar(WalkData.PercentTimeAppliedSoFar, SlideAmount);
@@ -306,7 +348,9 @@ bool UCommonGroundModeBase::ApplySlideAlongWall(FCommonMoveData& WalkData)
 	return false;
 }
 
-bool UCommonGroundModeBase::ApplyFloorHeightAdjustment(FCommonMoveData& WalkData)
+bool UCommonGroundModeBase::ApplyFloorHeightAdjustment(
+	FCommonMoveData& WalkData,
+	float MaxWalkableSlopeCosine)
 {
 	// Ensure we're standing on a walkable floor
 	if (CurrentFloor.IsWalkableFloor())
@@ -320,7 +364,7 @@ bool UCommonGroundModeBase::ApplyFloorHeightAdjustment(FCommonMoveData& WalkData
 		UGroundMovementUtils::TryMoveToAdjustHeightAboveFloor(
 			MovingComponentSet,
 			CurrentFloor,
-			CommonLegacySettings->MaxWalkSlopeCosine,
+			MaxWalkableSlopeCosine,
 			WalkData.MoveRecord);
 
 #if ENABLE_VISUAL_LOG
@@ -385,7 +429,7 @@ bool UCommonGroundModeBase::HandleFalling(
 		MoveRecord.SetDeltaSeconds((DeltaMs - OutputState.MovementEndState.RemainingMs) * 0.001f);
 
 		// Capture the final movement state
-		CaptureFinalState(CurrentFloor, MoveRecord);
+		CaptureFinalState(CurrentFloor, true, MoveRecord);
 
 		// Update the last fall time on the blackboard
 		SimBlackboard->Set(CommonBlackboard::LastFallTime, CurrentSimulationTime);
@@ -400,28 +444,41 @@ bool UCommonGroundModeBase::HandleFalling(
 	return false;
 }
 
-void UCommonGroundModeBase::CaptureFinalState(const FFloorCheckResult& FloorResult, const FMovementRecord& Record) const
+void UCommonGroundModeBase::CaptureFinalState(const FFloorCheckResult& FloorResult, bool bDidAttemptMovement, const FMovementRecord& Record) const
 {
-	FRelativeBaseInfo BaseInfo = UpdateFloorAndBaseInfo(FloorResult);
+	FRelativeBaseInfo PriorBaseInfo;
+	const bool bHasPriorBaseInfo = SimBlackboard->TryGet(CommonBlackboard::LastFoundDynamicMovementBase, PriorBaseInfo);
+
+	FRelativeBaseInfo CurrentBaseInfo = UpdateFloorAndBaseInfo(FloorResult);
+
+	// If we're on a dynamic base and we're not trying to move, keep using the same relative actor location. This prevents slow relative
+	//  drifting that can occur from repeated floor sampling as the base moves through the world.
+	if (CurrentBaseInfo.HasRelativeInfo()
+		&& bHasPriorBaseInfo && !bDidAttemptMovement
+		&& PriorBaseInfo.UsesSameBase(CurrentBaseInfo))
+	{
+		CurrentBaseInfo.ContactLocalPosition = PriorBaseInfo.ContactLocalPosition;
+	}
 
 	// TODO: Update Main/large movement record with substeps from our local record
 
-	if (BaseInfo.HasRelativeInfo())
+	if (CurrentBaseInfo.HasRelativeInfo())
 	{
-		OutDefaultSyncState->SetTransforms_WorldSpace(
-			MovingComponentSet.UpdatedComponent->GetComponentLocation(),
-			MovingComponentSet.UpdatedComponent->GetComponentRotation(),
-			Record.GetRelevantVelocity(),
-			BaseInfo.MovementBase.Get(),
-			BaseInfo.BoneName);
+		SimBlackboard->Set(CommonBlackboard::LastFoundDynamicMovementBase, CurrentBaseInfo);
+
+		OutDefaultSyncState->SetTransforms_WorldSpace( MovingComponentSet.UpdatedComponent->GetComponentLocation(),
+												  MovingComponentSet.UpdatedComponent->GetComponentRotation(),
+												  Record.GetRelevantVelocity(),
+												  CurrentBaseInfo.MovementBase.Get(), CurrentBaseInfo.BoneName);
 	}
 	else
 	{
-		OutDefaultSyncState->SetTransforms_WorldSpace(
-			MovingComponentSet.UpdatedComponent->GetComponentLocation(),
-			MovingComponentSet.UpdatedComponent->GetComponentRotation(),
-			Record.GetRelevantVelocity(),
-			nullptr);
+		SimBlackboard->Invalidate(CommonBlackboard::LastFoundDynamicMovementBase);
+
+		OutDefaultSyncState->SetTransforms_WorldSpace( MovingComponentSet.UpdatedComponent->GetComponentLocation(),
+												  MovingComponentSet.UpdatedComponent->GetComponentRotation(),
+												  Record.GetRelevantVelocity(),
+												  nullptr);	// no movement base
 	}
 
 	MovingComponentSet.UpdatedComponent->ComponentVelocity = OutDefaultSyncState->GetVelocity_WorldSpace();
@@ -436,13 +493,6 @@ FRelativeBaseInfo UCommonGroundModeBase::UpdateFloorAndBaseInfo(const FFloorChec
 	if (FloorResult.IsWalkableFloor() && UBasedMovementUtils::IsADynamicBase(FloorResult.HitResult.GetComponent()))
 	{
 		ReturnBaseInfo.SetFromFloorResult(FloorResult);
-
-		SimBlackboard->Set(CommonBlackboard::LastFoundDynamicMovementBase, ReturnBaseInfo);
-	}
-	else
-	{
-
-		SimBlackboard->Invalidate(CommonBlackboard::LastFoundDynamicMovementBase);
 	}
 
 	return ReturnBaseInfo;
@@ -450,5 +500,5 @@ FRelativeBaseInfo UCommonGroundModeBase::UpdateFloorAndBaseInfo(const FFloorChec
 
 const FName& UCommonGroundModeBase::GetFallingModeName() const
 {
-	return CommonLegacySettings->AirMovementModeName;
+	return DefaultModeNames::Falling;
 }

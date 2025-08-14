@@ -26,8 +26,10 @@ ACommonMoverPawn::ACommonMoverPawn()
 
 	SetReplicatingMovement(false);
 
+#if WITH_EDITORONLY_DATA
 	// Cooked builds may have some MoverComponent data missing, resulting in a non-functional actor.
 	bOptimizeBPComponentData = false;
+#endif
 }
 
 void ACommonMoverPawn::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)

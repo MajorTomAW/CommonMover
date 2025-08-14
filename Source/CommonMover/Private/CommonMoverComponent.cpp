@@ -9,7 +9,8 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(CommonMoverComponent)
 
-UCommonMoverComponent::UCommonMoverComponent()
+UCommonMoverComponent::UCommonMoverComponent(const FObjectInitializer& ObjectInitializer)
+	: Super()
 {
 }
 
@@ -59,7 +60,7 @@ bool UCommonMoverComponent::TeleportImmediately(
 			UpdatedComponent->SetWorldLocationAndRotation(Location, Orientation);
 			UpdatedComponent->ComponentVelocity = Velocity;
 			DefaultSync->SetTransforms_WorldSpace(Location, Orientation, FVector::ZeroVector, nullptr);
-			
+
 			bSuccessfullyWrote = (BackendLiaisonComp->WritePendingSyncState(PendingSyncState));
 			if (bSuccessfullyWrote)
 			{
@@ -80,7 +81,7 @@ void UCommonMoverComponent::WaitForTeleport()
 {
 	// Raise the teleport flag
 	bIsTeleporting = true;
-	
+
 	// Set the teleport movement mode
 	//@TODO:
 }
@@ -96,12 +97,52 @@ void UCommonMoverComponent::SetMovementDisabled(bool bState)
 
 bool UCommonMoverComponent::IsFalling() const
 {
-	if (const UCommonLegacyMovementSettings* LegacySettings = FindSharedSettings<UCommonLegacyMovementSettings>())
+	return HasGameplayTag(Mover_IsFalling, true);
+}
+
+bool UCommonMoverComponent::IsCrouching() const
+{
+	return HasGameplayTag(Mover_IsCrouching, true);
+}
+
+bool UCommonMoverComponent::IsFlying() const
+{
+	return HasGameplayTag(Mover_IsFlying, true);
+}
+
+bool UCommonMoverComponent::IsAirborne() const
+{
+	return HasGameplayTag(Mover_IsInAir, true);
+}
+
+bool UCommonMoverComponent::IsOnGround() const
+{
+	return HasGameplayTag(Mover_IsOnGround, true);
+}
+
+bool UCommonMoverComponent::IsSwimming() const
+{
+	return HasGameplayTag(Mover_IsSwimming, true);
+}
+
+bool UCommonMoverComponent::IsSlopeSliding() const
+{
+	if (IsAirborne())
 	{
-		return GetMovementModeName() != LegacySettings->AirMovementModeName;
+		FFloorCheckResult CurrentFloor;
+		const UMoverBlackboard* MyBlackboard = GetSimBlackboard();
+		if (IsValid(MyBlackboard) && MyBlackboard->TryGet(CommonBlackboard::LastFloorResult, CurrentFloor))
+		{
+			return CurrentFloor.bBlockingHit && !CurrentFloor.bWalkableFloor;
+		}
 	}
 
 	return false;
+}
+
+bool UCommonMoverComponent::CanJump() const
+{
+	return IsOnGround();
 }
 
 FGameplayTagContainer UCommonMoverComponent::GetTagsFromSyncState() const

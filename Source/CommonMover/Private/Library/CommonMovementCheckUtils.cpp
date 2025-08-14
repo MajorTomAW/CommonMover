@@ -1,29 +1,46 @@
-﻿// Copyright © 2025 Playton. All Rights Reserved.
+﻿// Author: Tom Werner (MajorT), 2025
 
 
 #include "Library/CommonMovementCheckUtils.h"
 
+#include "CommonMoverComponent.h"
 #include "MoverSimulationTypes.h"
 
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(CommonMovementCheckUtils)
 
-bool UCommonMovementCheckUtils::IsFalling(const FMoverSyncState& SyncState)
+bool UCommonMovementCheckUtils::IsFalling(const FSimulationTickParams& TickParams)
 {
-	return SyncState.MovementMode == DefaultModeNames::Falling;
+	const UCommonMoverComponent* CommonMover =
+		Cast<UCommonMoverComponent>(TickParams.MovingComps.MoverComponent.Get());
+
+	return (TickParams.StartState.SyncState.MovementMode == DefaultModeNames::Falling) ||
+		(CommonMover->IsFalling());
 }
 
-bool UCommonMovementCheckUtils::IsWalking(const FMoverSyncState& SyncState)
+bool UCommonMovementCheckUtils::IsWalking(const FSimulationTickParams& TickParams)
 {
-	return SyncState.MovementMode == DefaultModeNames::Walking;
+	const UCommonMoverComponent* CommonMover =
+		Cast<UCommonMoverComponent>(TickParams.MovingComps.MoverComponent.Get());
+
+	return (TickParams.StartState.SyncState.MovementMode == DefaultModeNames::Walking) ||
+		(CommonMover->IsOnGround());
 }
 
-bool UCommonMovementCheckUtils::IsFlying(const FMoverSyncState& SyncState)
+bool UCommonMovementCheckUtils::IsFlying(const FSimulationTickParams& TickParams)
 {
-	return SyncState.MovementMode == DefaultModeNames::Flying;
+	const UCommonMoverComponent* CommonMover =
+		Cast<UCommonMoverComponent>(TickParams.MovingComps.MoverComponent.Get());
+
+	return (TickParams.StartState.SyncState.MovementMode == DefaultModeNames::Flying) ||
+		(CommonMover->IsFlying());
 }
 
-bool UCommonMovementCheckUtils::IsSwimming(const FMoverSyncState& SyncState)
+bool UCommonMovementCheckUtils::IsSwimming(const FSimulationTickParams& TickParams)
 {
-	return SyncState.MovementMode == DefaultModeNames::Swimming;
+	const UCommonMoverComponent* CommonMover =
+		Cast<UCommonMoverComponent>(TickParams.MovingComps.MoverComponent.Get());
+
+	return (TickParams.StartState.SyncState.MovementMode == DefaultModeNames::Swimming) ||
+		(CommonMover->IsSwimming());
 }

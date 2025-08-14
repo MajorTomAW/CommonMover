@@ -11,7 +11,7 @@
 /** Base class for all ground movement modes.
  * Establishes a common simulation structure to handle slopes, stairs, and other obstacles.
  */
-UCLASS()
+UCLASS(Abstract)
 class COMMONMOVER_API UCommonGroundModeBase : public UCommonMovementMode
 {
 	GENERATED_BODY()
@@ -25,7 +25,7 @@ protected:
 	//~ End UCommonMovementMode
 
 	/** Validates the floor prior to any movement */
-	virtual void ValidateFloor();
+	virtual void ValidateFloor(float FloorSweepDistance, float MaxWalkableSlopeCosine);
 
 	/** Attempts to move the updated comp along any dynamically moving floor it is standing on */
 	virtual bool ApplyDynamicFloorMovement(FMoverTickEndData& OutputState, FMovementRecord& MoveRecord);
@@ -37,16 +37,16 @@ protected:
 	virtual bool ApplyDepenetrationOnFirstMove(FCommonMoveData& WalkData);
 
 	/** Calculates ramp deflection and moves the updated component up a ramp */
-	virtual bool ApplyRampMove(FCommonMoveData& WalkData);
+	virtual bool ApplyRampMove(FCommonMoveData& WalkData, float MaxWalkableSlopeCosine);
 
 	/** Attempts to move the updated component over a climbable obstacle */
-	virtual bool ApplyStepUpMove(FCommonMoveData& WalkData, FOptionalFloorCheckResult& StepUpFloorResult);
+	virtual bool ApplyStepUpMove(FCommonMoveData& WalkData, FOptionalFloorCheckResult& StepUpFloorResult, float MaxWalkableSlopeCosine, float MaxStepHeight, float FloorSweepDistance);
 
 	/** Attempts to slide the updated component along a wall or other blocking, unclimbable obstacle */
-	virtual bool ApplySlideAlongWall(FCommonMoveData& WalkData);
+	virtual bool ApplySlideAlongWall(FCommonMoveData& WalkData, float MaxWalkableSlopeCosine, float MaxStepHeight);
 
 	/** Attempts to adjust the character vertically so it contacts the floor */
-	virtual bool ApplyFloorHeightAdjustment(FCommonMoveData& WalkData);
+	virtual bool ApplyFloorHeightAdjustment(FCommonMoveData& WalkData, float MaxWalkableSlopeCosine);
 
 	/** Applies corrections to the updated component's position while not moving. */
 	virtual bool ApplyIdleCorrections(FCommonMoveData& WalkData);
@@ -55,7 +55,7 @@ protected:
 	virtual bool HandleFalling(FMoverTickEndData & OutputState, FMovementRecord & MoveRecord, FHitResult & Hit, float TimeAppliedSoFar);
 
 	/** Captures the final movement state for the simulation frame and updates the output default sync state */
-	void CaptureFinalState(const FFloorCheckResult& FloorResult, const FMovementRecord& Record) const;
+	void CaptureFinalState(const FFloorCheckResult& FloorResult, bool bDidAttemptMovement, const FMovementRecord& Record) const;
 
 	/** Updates and returns the floor and base info data structures */
 	FRelativeBaseInfo UpdateFloorAndBaseInfo(const FFloorCheckResult& FloorResult) const;
@@ -68,7 +68,7 @@ protected:
 	// Transient variables used by the simulation stages
 	// @NOTE: These should be considered invalidated outside of OnSimulationTick()
 	// and aren't meant to persist between simulation frames
-	
+
 	/** Floor info structs */
 	FFloorCheckResult CurrentFloor;
 	FRelativeBaseInfo OldRelativeBase;

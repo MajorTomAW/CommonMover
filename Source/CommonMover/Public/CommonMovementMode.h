@@ -35,7 +35,7 @@ struct FCommonMoveData
 };
 
 /** Provides a common structure for movement modes. */
-UCLASS()
+UCLASS(Abstract)
 class COMMONMOVER_API UCommonMovementMode
 	: public UBaseMovementMode
 	, public IVisualLoggerDebugSnapshotInterface
@@ -93,7 +93,7 @@ protected:
 
 protected:
 	/** Tag to add while this mode is active */
-	UPROPERTY(Category="Tags", EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(Category=Mover, EditAnywhere, BlueprintReadWrite)
 	FGameplayTag ModeTag;
 
 
@@ -109,10 +109,6 @@ protected:
 
 	/** Pointers to the updated components */
 	FMovingComponentSet MovingComponentSet;
-
-	/** Pointer to the legacy movement settings */
-	UPROPERTY()
-	TObjectPtr<const UCommonLegacyMovementSettings> CommonLegacySettings;
 
 	/** Non-mutable pointers to the starting sync states */
 	const FMoverDefaultSyncState* StartingSyncState;

@@ -1,4 +1,4 @@
-﻿// Copyright © 2025 Playton. All Rights Reserved.
+﻿// Author: Tom Werner (MajorT), 2025
 
 #pragma once
 
@@ -6,25 +6,29 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "CommonMovementCheckUtils.generated.h"
 
+struct FSimulationTickParams;
 struct FMoverSyncState;
-/**
- * 
- */
-UCLASS()
-class COMMONMOVER_API UCommonMovementCheckUtils : public UBlueprintFunctionLibrary
+
+#define MY_API COMMONMOVER_API
+
+/** */
+UCLASS(MinimalAPI)
+class UCommonMovementCheckUtils : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
 public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mover|State")
-	static bool IsFalling(const FMoverSyncState& SyncState);
+	static MY_API bool IsFalling(const FSimulationTickParams& TickParams);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mover|State")
-	static bool IsWalking(const FMoverSyncState& SyncState);
+	static MY_API bool IsWalking(const FSimulationTickParams& TickParams);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mover|State")
-	static bool IsFlying(const FMoverSyncState& SyncState);
+	static MY_API bool IsFlying(const FSimulationTickParams& TickParams);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mover|State")
-	static bool IsSwimming(const FMoverSyncState& SyncState);
+	static MY_API bool IsSwimming(const FSimulationTickParams& TickParams);
 };
+
+#undef MY_API

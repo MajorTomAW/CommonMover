@@ -1,5 +1,6 @@
 ﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
 using UnrealBuildTool;
 
 public class CommonMover : ModuleRules
@@ -8,18 +9,20 @@ public class CommonMover : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new []
-		{ 
+		{
 			"Core",
 			"GameplayTags",
 			"Mover",
 			"EnhancedInput"
 		});
-			
-		
+
+
 		PrivateDependencyModuleNames.AddRange(new []
-		{ 
-			"CoreUObject", 
-			"Engine", 
+		{
+			"CoreUObject",
+			"Engine",
 		});
+
+		SetupGameplayDebuggerSupport(Target);
 	}
 }

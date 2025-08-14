@@ -22,8 +22,6 @@ UCommonMovementMode::UCommonMovementMode(const FObjectInitializer& ObjectInitial
 
 	OutDefaultSyncState = nullptr;
 	OutTagsSyncState = nullptr;
-
-	SharedSettingsClasses.Add(UCommonLegacyMovementSettings::StaticClass());
 }
 
 void UCommonMovementMode::GenerateMove_Implementation(
@@ -72,7 +70,7 @@ void UCommonMovementMode::SimulationTick_Implementation(const FSimulationTickPar
 
 	// Handle anything else after the final location and velocity has been computed
 	PostMove(OutputState);
-	
+
 #if ENABLE_VISUAL_LOG
 	{
 		const FVector LogLoc = MovingComponentSet.UpdatedComponent->GetComponentLocation();
@@ -129,14 +127,14 @@ bool UCommonMovementMode::PrepareSimulationData(const FSimulationTickParams& Par
 	DeltaMs = Params.TimeStep.StepMs;
 	DeltaTime = Params.TimeStep.StepMs * 0.001f;
 	CurrentSimulationTime = Params.TimeStep.BaseSimTimeMs;
-	
+
 	return true;
 }
 
 void UCommonMovementMode::BuildSimulationOutputStates(FMoverTickEndData& OutputState)
 {
 	OutDefaultSyncState = &OutputState.SyncState.SyncStateCollection.FindOrAddMutableDataByType<FMoverDefaultSyncState>();
-	
+
 	OutTagsSyncState = &OutputState.SyncState.SyncStateCollection.FindOrAddMutableDataByType<FGameplayTagsSyncState>();
 	OutTagsSyncState->ClearTags();
 }
@@ -145,11 +143,6 @@ void UCommonMovementMode::OnRegistered(const FName ModeName)
 {
 	Super::OnRegistered(ModeName);
 
-	// Get the common legacy settings
-	CommonLegacySettings = GetMoverComponent()->FindSharedSettings<UCommonLegacyMovementSettings>();
-	ensureMsgf(CommonLegacySettings, TEXT("Failed to find instance of CommonLegacyMovementSettings on %s. Movement may not function properly."),
-		*GetPathNameSafe(this));
-
 #if ENABLE_VISUAL_LOG
 	REDIRECT_TO_VLOG(GetMoverComponent()->GetOwner());
 #endif
@@ -157,9 +150,6 @@ void UCommonMovementMode::OnRegistered(const FName ModeName)
 
 void UCommonMovementMode::OnUnregistered()
 {
-	// Release the shared settings pointers
-	CommonLegacySettings = nullptr;
-	
 	Super::OnUnregistered();
 }
 

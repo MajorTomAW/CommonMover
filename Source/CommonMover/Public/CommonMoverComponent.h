@@ -14,7 +14,7 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMoverEvent_OnLanded, const FName&, NextMovementModeName, const FHitResult&, HitResult);
 
 /** Mover component extended with common functionality */
-UCLASS(meta=(BlueprintSpawnableComponent))
+UCLASS(BlueprintType, Blueprintable, meta=(BlueprintSpawnableComponent))
 class COMMONMOVER_API UCommonMoverComponent
 	: public UMoverComponent
 	, public IVisualLoggerDebugSnapshotInterface
@@ -22,7 +22,7 @@ class COMMONMOVER_API UCommonMoverComponent
 	GENERATED_BODY()
 
 public:
-	UCommonMoverComponent();
+	UCommonMoverComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 protected:
 	//~ Begin IVisualLoggerDebugSnapshotInterface
@@ -42,7 +42,7 @@ protected:
 public:
 	/** Override to handle Raft movement copy and work around simulation timing issues */
 	bool TeleportImmediately(const FVector& Location, const FRotator& Orientation, const FVector& Velocity);
-	
+
 	/** Called from Movement Modes to notify of landed events */
 	void OnLanded(const FName& NextMovementModeName, const FHitResult& HitResult);
 
@@ -56,15 +56,43 @@ public:
 
 	/** Returns true if the owner is currently falling */
 	UFUNCTION(BlueprintPure, Category="Mover")
-	bool IsFalling() const;
+	virtual bool IsFalling() const;
 
 	/** Returns true if the owner is currently waiting for a non-immediate teleport */
 	UFUNCTION(BlueprintPure, Category="Mover")
-	bool IsTeleporting() const { return bIsTeleporting; };
+	virtual bool IsTeleporting() const { return bIsTeleporting; };
 
 	/** Returns true if movement for the owner has been disabled */
 	UFUNCTION(BlueprintPure, Category="Mover")
-	bool IsMovementDisabled() const { return bDisableMovement; };
+	virtual bool IsMovementDisabled() const { return bDisableMovement; };
+
+	/** Returns true if currently crouching */
+	UFUNCTION(BlueprintPure, Category="Mover")
+	virtual bool IsCrouching() const;
+
+	/** Returns true if currently flying (moving through a non-fluid volume without resting on the ground) */
+	UFUNCTION(BlueprintPure, Category="Mover")
+	virtual bool IsFlying() const;
+
+	/** Is this actor in an airborne state? (e.g., Flying, Falling) */
+	UFUNCTION(BlueprintPure, Category="Mover")
+	virtual bool IsAirborne() const;
+
+	/** Is this actor in a grounded state? (e.g., Walking) */
+	UFUNCTION(BlueprintPure, Category="Mover")
+	virtual bool IsOnGround() const;
+
+	/** Is this actor in a Swimming state? (e.g., Swimming) */
+	UFUNCTION(BlueprintPure, Category="Mover")
+	virtual bool IsSwimming() const;
+
+	/** Is this actor sliding on an unwalkable slope? */
+	UFUNCTION(BlueprintPure, Category="Mover")
+	virtual bool IsSlopeSliding() const;
+
+	/** Can this Actor jump? */
+	UFUNCTION(BlueprintPure, Category="Mover")
+	virtual bool CanJump() const;
 
 	/** Returns the Gameplay Tag Container from the Titan Tags Sync State */
 	UFUNCTION(BlueprintPure, Category="Mover")
