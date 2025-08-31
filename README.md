@@ -1,6 +1,6 @@
 # Common Mover
 A simplified starting point into the Mover framework.  
-Inspired by ``Project Titan`` Epic Sample Project.
+Inspired by / Ported from ``Project Titan`` Epic Sample Project.
 
 ## Main Features
 - ``Common Movement Mode``
